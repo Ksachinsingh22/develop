@@ -40,7 +40,8 @@ function NavBar() {
     <nav className="navbar">
       <div className="navbar-logo">
         <Link to="/">
-          <img src={logoImage} alt="Logo" />
+          {/* <img src={logoImage} alt="Logo" /> */}
+          <h2>Logo</h2>
         </Link>
       </div>
       <ul className="navbar-links">
