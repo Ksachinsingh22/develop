@@ -49,3 +49,19 @@ button {
 button:hover {
   background-color: #0056b3;
 }
+
+.login-links {
+  margin-top: 20px;
+  display: flex;
+  justify-content: space-between;
+}
+
+.login-links a {
+  text-decoration: none;
+  color: #007bff;
+  transition: color 0.3s;
+
+  &:hover {
+    color: #0056b3;
+  }
+}

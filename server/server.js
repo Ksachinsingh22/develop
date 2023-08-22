@@ -1,20 +1,30 @@
 const express = require("express");
 const dotenv = require("dotenv");
-
 const connectDB = require("./config/db");
 const setMiddleware = require("./config/middleware");
+const userRoutes = require("./routes/user");
+const quizRoutes = require("./routes/quiz");
+const resultRoutes = require("./routes/result");
 
-const userRoutes = require("./routes/users/auth");
+// Initialize the main app
+const app = express();
 
 // Load environment variables
 dotenv.config();
 
-const app = express();
-
 // Set up middleware
 setMiddleware(app);
 
-app.use("/api/users", userRoutes);
+// Initialize the mini router for /api endpoint
+const apiRouter = express.Router();
+
+// Mount specific routes onto the mini router
+apiRouter.use("/users", userRoutes);
+apiRouter.use("/quiz", quizRoutes);
+apiRouter.use("/results", resultRoutes);
+
+// Mount the mini router onto the main app under /api endpoint
+app.use("/api", apiRouter);
 
 // Connect to MongoDB
 connectDB();
@@ -28,3 +38,39 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
+
+// --------------------------------------------------------------------
+
+// const express = require("express");
+// const dotenv = require("dotenv");
+
+// const connectDB = require("./config/db");
+// const setMiddleware = require("./config/middleware");
+
+// // Routes
+// const userRoutes = require("./routes/users/auth");
+// const quizRoutes = require("./routes/quiz");
+
+// // Load environment variables
+// dotenv.config();
+
+// const app = express();
+
+// // Set up middleware
+// setMiddleware(app);
+
+// app.use("/api/users", userRoutes);
+// app.use("/api/quiz", quizRoutes);
+
+// // Connect to MongoDB
+// connectDB();
+
+// // Test route
+// app.get("/", (req, res) => {
+//   res.send("Recurring Deposit System API");
+// });
+
+// const PORT = process.env.PORT || 5000;
+// app.listen(PORT, () => {
+//   console.log(`Server running on http://localhost:${PORT}`);
+// });

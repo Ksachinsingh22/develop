@@ -1,119 +1,399 @@
-import React, { useState } from "react";
-import "./QuizPage.css";
+import React, { useState, useEffect } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import axios from "axios";
+import { useSelector } from "react-redux";
 
 const QuizPage = () => {
-  const [selectedOption, setSelectedOption] = useState(null);
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const questions = [
-    {
-      question: "What is the capital of France?",
-      options: ["Berlin", "Madrid", "Paris", "Rome"],
-      correct: 2,
-    },
-    {
-      question: "Which planet is known as the 'Red Planet'?",
-      options: ["Mars", "Venus", "Jupiter", "Saturn"],
-      correct: 0,
-    },
-    {
-      question: "Which of the following is not a prime number?",
-      options: ["2", "3", "4", "5"],
-      correct: 2,
-    },
-    {
-      question: "Who wrote the play 'Romeo and Juliet'?",
-      options: [
-        "Charles Dickens",
-        "William Shakespeare",
-        "Jane Austen",
-        "George Orwell",
-      ],
-      correct: 1,
-    },
-    {
-      question: "What is the largest mammal?",
-      options: ["Elephant", "Whale", "Giraffe", "Hippopotamus"],
-      correct: 1,
-    },
-    {
-      question: "Which gas do plants absorb from the atmosphere?",
-      options: ["Oxygen", "Carbon Dioxide", "Nitrogen", "Helium"],
-      correct: 1,
-    },
-    {
-      question: "Which country is known as the 'Land of the Rising Sun'?",
-      options: ["China", "South Korea", "Japan", "Thailand"],
-      correct: 2,
-    },
-    {
-      question: "Which element has the chemical symbol 'Au'?",
-      options: ["Silver", "Gold", "Aluminum", "Argon"],
-      correct: 1,
-    },
-    {
-      question: "Which ocean is the largest?",
-      options: [
-        "Atlantic Ocean",
-        "Indian Ocean",
-        "Arctic Ocean",
-        "Pacific Ocean",
-      ],
-      correct: 3,
-    },
-    // ... add more questions as needed
-  ];
+  const username = useSelector((state) => state.auth.user?.username || "");
 
-  const handleOptionChange = (index) => {
-    setSelectedOption(index);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const fetchedQuizData = location.state?.quizData;
+
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [selectedOption, setSelectedOption] = useState(null);
+  const [timeLeft, setTimeLeft] = useState(fetchedQuizData?.timeOfQuiz * 60);
+
+  useEffect(() => {
+    if (timeLeft <= 0) {
+      submitQuiz();
+    } else {
+      const timer = setTimeout(() => {
+        setTimeLeft(timeLeft - 1);
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [timeLeft, fetchedQuizData.quizId, navigate]);
+
+  const handleOptionChange = (optionId) => {
+    setSelectedOption(optionId);
+
+    let quizTaken = JSON.parse(sessionStorage.getItem("quizTaken")) || {};
+    if (!quizTaken[fetchedQuizData.quizId]) {
+      quizTaken[fetchedQuizData.quizId] = [];
+    }
+    quizTaken[fetchedQuizData.quizId][currentQuestionIndex] = {
+      questionId: currentQuestion.questionId,
+      optionId: optionId,
+    };
+    sessionStorage.setItem("quizTaken", JSON.stringify(quizTaken));
   };
 
-  const handleNavigation = (direction) => {
-    if (direction === "prev" && currentQuestionIndex > 0) {
-      setCurrentQuestionIndex(currentQuestionIndex - 1);
-      setSelectedOption(null);
-    } else if (
-      direction === "next" &&
-      currentQuestionIndex < questions.length - 1
-    ) {
+  const handleNext = () => {
+    if (currentQuestionIndex < fetchedQuizData.quiz.length - 1) {
       setCurrentQuestionIndex(currentQuestionIndex + 1);
       setSelectedOption(null);
     }
   };
 
+  const handlePrevious = () => {
+    if (currentQuestionIndex > 0) {
+      setCurrentQuestionIndex(currentQuestionIndex - 1);
+      setSelectedOption(null);
+    }
+  };
+
+  const handleJumpToQuestion = (index) => {
+    setCurrentQuestionIndex(index);
+    setSelectedOption(null);
+  };
+
+  const currentQuestion = fetchedQuizData.quiz[currentQuestionIndex];
+
+  const sendDataToBackend = async () => {
+    const data = JSON.parse(sessionStorage.getItem("quizTaken"));
+    const payload = {
+      username: username,
+      quizTaken: data,
+    };
+
+    try {
+      await axios.patch("/api/users/saveQuizResults", payload);
+      alert("Quiz results saved successfully!");
+    } catch (error) {
+      console.error("Failed to save quiz results", error);
+      alert("Failed to save quiz results. Please try again.");
+    }
+  };
+
+  const submitQuiz = () => {
+    if (fetchedQuizData.quizId !== "xxx00") {
+      sendDataToBackend();
+    }
+    sessionStorage.removeItem("quizTaken");
+    alert("Quiz submitted successfully!");
+    navigate(fetchedQuizData.quizId === "xxx00" ? "/" : "/dashboard");
+  };
+
   return (
     <div className="quiz-container">
-      <h2>{questions[currentQuestionIndex].question}</h2>
-      <div className="options">
-        {questions[currentQuestionIndex].options.map((option, index) => (
-          <label key={index}>
-            <input
-              type="radio"
-              value={index}
-              checked={selectedOption === index}
-              onChange={() => handleOptionChange(index)}
-            />
-            {option}
-          </label>
-        ))}
-      </div>
-      <div className="timer">00:30</div> {/* Implement timer logic */}
-      <div className="navigation-buttons">
-        <button onClick={() => handleNavigation("prev")}>Previous</button>
-        <button onClick={() => handleNavigation("next")}>Next</button>
-      </div>
       <div className="question-navigation">
-        {questions.map((_, index) => (
+        {fetchedQuizData.quiz.map((_, index) => (
           <button
             key={index}
+            onClick={() => handleJumpToQuestion(index)}
             className={currentQuestionIndex === index ? "active" : ""}
-            onClick={() => setCurrentQuestionIndex(index)}
           >
             {index + 1}
           </button>
         ))}
+      </div>
+
+      <div className="quiz-content">
+        <h2>{fetchedQuizData.quizName}</h2>
+        <div className="timer">
+          <h3>
+            Time Left : {Math.floor(timeLeft / 60)}:
+            {timeLeft % 60 < 10 ? "0" : ""}
+            {timeLeft % 60}
+          </h3>
+        </div>
+
+        <h2>{currentQuestion.questionText}</h2>
+        <div className="options">
+          <h3>
+            {currentQuestion.options.map((option) => (
+              <label key={option.optionId}>
+                <input
+                  type="radio"
+                  value={option.optionId}
+                  checked={selectedOption === option.optionId}
+                  onChange={() => handleOptionChange(option.optionId)}
+                />
+                {option.optionText}
+              </label>
+            ))}
+          </h3>
+        </div>
+        <button onClick={handlePrevious} disabled={currentQuestionIndex === 0}>
+          Previous
+        </button>
+        <button
+          onClick={handleNext}
+          disabled={currentQuestionIndex === fetchedQuizData.quiz.length - 1}
+        >
+          Next
+        </button>
+        <button onClick={submitQuiz}>Submit</button>
       </div>
     </div>
   );
 };
 
 export default QuizPage;
+
+// -------------------------------------------------------------------------
+
+// import React, { useState, useEffect } from "react";
+// import { useLocation, useNavigate } from "react-router-dom";
+// import axios from "axios"; // Assuming you're using axios for HTTP requests
+// import { useSelector } from "react-redux";
+
+// const QuizPage = () => {
+//   const username = useSelector((state) => state.auth.user?.username || "");
+
+//   const location = useLocation();
+//   const navigate = useNavigate();
+//   const fetchedQuizData = location.state?.quizData;
+
+//   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+//   const [selectedOption, setSelectedOption] = useState(null);
+//   const [timeLeft, setTimeLeft] = useState(fetchedQuizData?.timeOfQuiz * 60); // Convert minutes to seconds
+
+//   useEffect(() => {
+//     if (timeLeft <= 0) {
+//       if (fetchedQuizData.quizId !== "xxx00") {
+//         // Send data to backend
+//         sendDataToBackend();
+//       }
+//       sessionStorage.removeItem("quizTaken");
+//       alert("Time is Up");
+//       navigate(fetchedQuizData.quizId === "xxx00" ? "/" : "/dashboard");
+//     } else {
+//       const timer = setTimeout(() => {
+//         setTimeLeft(timeLeft - 1);
+//       }, 1000);
+//       return () => clearTimeout(timer);
+//     }
+//   }, [timeLeft, fetchedQuizData.quizId, navigate]);
+
+//   const handleOptionChange = (optionId) => {
+//     setSelectedOption(optionId);
+
+//     let quizTaken = JSON.parse(sessionStorage.getItem("quizTaken")) || {};
+//     if (!quizTaken[fetchedQuizData.quizId]) {
+//       quizTaken[fetchedQuizData.quizId] = [];
+//     }
+//     quizTaken[fetchedQuizData.quizId][currentQuestionIndex] = {
+//       questionId: currentQuestion.questionId,
+//       optionId: optionId,
+//     };
+//     sessionStorage.setItem("quizTaken", JSON.stringify(quizTaken));
+//   };
+
+//   const handleNext = () => {
+//     if (currentQuestionIndex < fetchedQuizData.quiz.length - 1) {
+//       setCurrentQuestionIndex(currentQuestionIndex + 1);
+//       setSelectedOption(null); // Reset the selected option
+//     }
+//   };
+
+//   const handlePrevious = () => {
+//     if (currentQuestionIndex > 0) {
+//       setCurrentQuestionIndex(currentQuestionIndex - 1);
+//       setSelectedOption(null); // Reset the selected option
+//     }
+//   };
+
+//   const handleJumpToQuestion = (index) => {
+//     setCurrentQuestionIndex(index);
+//     setSelectedOption(null); // Reset the selected option
+//   };
+
+//   const currentQuestion = fetchedQuizData.quiz[currentQuestionIndex];
+
+//   const sendDataToBackend = async () => {
+//     const data = JSON.parse(sessionStorage.getItem("quizTaken"));
+//     // const username = localStorage.getItem("username");
+
+//     const payload = {
+//       username: username,
+//       quizTaken: data,
+//     };
+//     console.log("===>>> ", payload);
+
+//     try {
+//       await axios.patch("/api/users/saveQuizResults", payload);
+//       alert("Quiz results saved successfully!");
+//     } catch (error) {
+//       console.error("Failed to save quiz results", error);
+//       alert("Failed to save quiz results. Please try again.");
+//     }
+//   };
+
+//   return (
+//     <div className="quiz-container">
+//       <div className="question-navigation">
+//         {fetchedQuizData.quiz.map((_, index) => (
+//           <button
+//             key={index}
+//             onClick={() => handleJumpToQuestion(index)}
+//             className={currentQuestionIndex === index ? "active" : ""}
+//           >
+//             {index + 1}
+//           </button>
+//         ))}
+//       </div>
+
+//       <div className="quiz-content">
+//         <h2>{fetchedQuizData.quizName}</h2>
+//         <div className="timer">
+//           <h3>
+//             Time Left : {Math.floor(timeLeft / 60)}:
+//             {timeLeft % 60 < 10 ? "0" : ""}
+//             {timeLeft % 60}
+//           </h3>
+//         </div>
+
+//         <h2>{currentQuestion.questionText}</h2>
+//         <div className="options">
+//           <h3>
+//             {currentQuestion.options.map((option) => (
+//               <label key={option.optionId}>
+//                 <input
+//                   type="radio"
+//                   value={option.optionId}
+//                   checked={selectedOption === option.optionId}
+//                   onChange={() => handleOptionChange(option.optionId)}
+//                 />
+//                 {option.optionText}
+//               </label>
+//             ))}
+//           </h3>
+//         </div>
+//         <button onClick={handlePrevious} disabled={currentQuestionIndex === 0}>
+//           Previous
+//         </button>
+//         <button
+//           onClick={handleNext}
+//           disabled={currentQuestionIndex === fetchedQuizData.quiz.length - 1}
+//         >
+//           Next
+//         </button>
+//       </div>
+//     </div>
+//   );
+// };
+
+// export default QuizPage;
+
+// ----------------------------------------------------------------------
+
+// import React, { useState, useEffect } from "react";
+// import { useLocation, useNavigate } from "react-router-dom";
+
+// const QuizPage = () => {
+//   const location = useLocation();
+//   const navigate = useNavigate();
+//   const fetchedQuizData = location.state?.quizData;
+
+//   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+//   const [selectedOption, setSelectedOption] = useState(null);
+//   const [timeLeft, setTimeLeft] = useState(fetchedQuizData?.timeOfQuiz * 60); // Convert minutes to seconds
+
+//   useEffect(() => {
+//     if (timeLeft <= 0) {
+//       alert("Time is Up");
+//       if (fetchedQuizData.quizId === "xxx00") {
+//         navigate("/");
+//       } else {
+//         navigate("/dashboard");
+//       }
+//     } else {
+//       const timer = setTimeout(() => {
+//         setTimeLeft(timeLeft - 1);
+//       }, 1000);
+//       return () => clearTimeout(timer);
+//     }
+//   }, [timeLeft, fetchedQuizData, navigate]);
+
+//   const handleOptionChange = (optionId) => {
+//     setSelectedOption(optionId);
+//   };
+
+//   const handleNext = () => {
+//     if (currentQuestionIndex < fetchedQuizData.quiz.length - 1) {
+//       setCurrentQuestionIndex(currentQuestionIndex + 1);
+//       setSelectedOption(null); // Reset the selected option
+//     }
+//   };
+
+//   const handlePrevious = () => {
+//     if (currentQuestionIndex > 0) {
+//       setCurrentQuestionIndex(currentQuestionIndex - 1);
+//       setSelectedOption(null); // Reset the selected option
+//     }
+//   };
+
+//   const handleJumpToQuestion = (index) => {
+//     setCurrentQuestionIndex(index);
+//     setSelectedOption(null); // Reset the selected option
+//   };
+
+//   const currentQuestion = fetchedQuizData.quiz[currentQuestionIndex];
+
+//   return (
+//     <div className="quiz-container">
+//       <div className="question-navigation">
+//         {fetchedQuizData.quiz.map((_, index) => (
+//           <button
+//             key={index}
+//             onClick={() => handleJumpToQuestion(index)}
+//             className={currentQuestionIndex === index ? "active" : ""}
+//           >
+//             {index + 1}
+//           </button>
+//         ))}
+//       </div>
+
+//       <div className="quiz-content">
+//         <h2>{fetchedQuizData.quizName}</h2>
+//         <div className="timer">
+//           <h3>
+//             Time Left : {Math.floor(timeLeft / 60)}:
+//             {timeLeft % 60 < 10 ? "0" : ""}
+//             {timeLeft % 60}
+//           </h3>
+//         </div>
+
+//         <h2>{currentQuestion.questionText}</h2>
+//         <div className="options">
+//           <h3>
+//             {currentQuestion.options.map((option) => (
+//               <label key={option.optionId}>
+//                 <input
+//                   type="radio"
+//                   value={option.optionId}
+//                   checked={selectedOption === option.optionId}
+//                   onChange={() => handleOptionChange(option.optionId)}
+//                 />
+//                 {option.optionText}
+//               </label>
+//             ))}
+//           </h3>
+//         </div>
+//         <button onClick={handlePrevious} disabled={currentQuestionIndex === 0}>
+//           Previous
+//         </button>
+//         <button
+//           onClick={handleNext}
+//           disabled={currentQuestionIndex === fetchedQuizData.quiz.length - 1}
+//         >
+//           Next
+//         </button>
+//       </div>
+//     </div>
+//   );
+// };
+
+// export default QuizPage;
